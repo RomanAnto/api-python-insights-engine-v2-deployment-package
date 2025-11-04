@@ -9,6 +9,7 @@ Reusable Python deployment package that automates the entire process of deployin
 - [Features](#features)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
+- [DSSAT-py Deployment Guide](#dssat-py-deployment-guide)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Configuration](#configuration)
@@ -96,6 +97,33 @@ pip install -r requirements.txt
 # Verify installation
 python deployment_package/deploy.py --help
 ```
+
+## 🎯 DSSAT-py Deployment Guide
+
+**Are you deploying the DSSAT-py model?** We have specific guides for you!
+
+### Quick Start (15 minutes)
+📘 **[DSSAT-py Quick Start Guide](docs/DSSAT_PY_QUICK_START.md)**
+
+Perfect for getting started quickly with copy-paste commands and a visual workflow diagram.
+
+### Comprehensive Guide
+📗 **[DSSAT-py Deployment Guide](docs/DSSAT_PY_DEPLOYMENT_GUIDE.md)**
+
+Step-by-step guide with:
+- ✅ Detailed instructions for DSSAT-py repository at `C:\Users\u836422\OneDrive - Syngenta\Digital Architecture Team\IE2.0\dssat-py`
+- ✅ Custom model loading examples for DSSAT
+- ✅ Input/output schema examples for crop simulation
+- ✅ CircleCI configuration walkthrough
+- ✅ Troubleshooting specific to DSSAT models
+- ✅ Cost estimation and monitoring
+
+**What you'll build:**
+```
+DSSAT Model → FastAPI → Docker → SageMaker → Lambda → API Gateway → Production
+```
+
+---
 
 ## 💻 Usage
 

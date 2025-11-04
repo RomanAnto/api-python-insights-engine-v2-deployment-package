@@ -103,3 +103,4 @@ lambda_package/
 # Documentation builds
 docs/_build/
 site/
+docs/MODEL_TRAINING_GUIDE.md

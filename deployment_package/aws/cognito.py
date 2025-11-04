@@ -1,0 +1,3 @@
+"""
+Cognito integration logic placeholder.
+"""

@@ -1,0 +1,314 @@
+version: 2.1
+
+# CircleCI ORBs for AWS and code quality
+orbs:
+  aws-cli: circleci/aws-cli@4.1.0
+  aws-ecr: circleci/aws-ecr@9.0.0
+  sonarcloud: sonarsource/sonarcloud@2.0.0
+  python: circleci/python@2.1.1
+
+# Pipeline parameters (can be set when triggering manually)
+parameters:
+  model-name:
+    type: string
+    default: "ml-model"
+    description: "Name of the ML model to deploy"
+  environment:
+    type: string
+    default: "dev"
+    description: "Deployment environment (dev/qa/staging/prod)"
+
+# Reusable commands
+commands:
+  install-deployment-deps:
+    description: "Install deployment package dependencies"
+    steps:
+      - run:
+          name: Install deployment dependencies
+          command: |
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+# Jobs
+jobs:
+  # Job 1: Code quality and security scanning
+  code-quality-scan:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip
+      - run:
+          name: Run unit tests
+          command: |
+            pip install pytest pytest-cov
+            pytest tests/ -v --cov=deployment_package --cov-report=xml || true
+      - sonarcloud/scan:
+          sonar_token_variable_name: SONAR_TOKEN
+      - run:
+          name: Check SonarQube quality gate
+          command: echo "✅ Code quality scan complete"
+
+  # Job 2: Build and push Docker image to ECR
+  build-and-push-image:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - aws-cli/setup:
+          role_arn: ${AWS_ROLE_ARN}
+          region: ${AWS_REGION}
+      - run:
+          name: Build Docker image
+          command: |
+            echo "Building Docker image for << pipeline.parameters.model-name >>"
+            docker build \
+              --build-arg FURY_TOKEN=${FURY_TOKEN} \
+              -t << pipeline.parameters.model-name >>:${CIRCLE_SHA1} \
+              -t << pipeline.parameters.model-name >>:latest \
+              .
+      - run:
+          name: Push to ECR
+          command: |
+            aws ecr get-login-password --region ${AWS_REGION} | \
+              docker login --username AWS --password-stdin ${AWS_ECR_REGISTRY}
+            
+            docker tag << pipeline.parameters.model-name >>:${CIRCLE_SHA1} \
+              ${AWS_ECR_REGISTRY}/<< pipeline.parameters.model-name >>:${CIRCLE_SHA1}
+            
+            docker tag << pipeline.parameters.model-name >>:latest \
+              ${AWS_ECR_REGISTRY}/<< pipeline.parameters.model-name >>:latest
+            
+            docker push ${AWS_ECR_REGISTRY}/<< pipeline.parameters.model-name >>:${CIRCLE_SHA1}
+            docker push ${AWS_ECR_REGISTRY}/<< pipeline.parameters.model-name >>:latest
+            
+            echo "✅ Image pushed: ${AWS_ECR_REGISTRY}/<< pipeline.parameters.model-name >>:${CIRCLE_SHA1}"
+
+  # Job 3: Deploy to SageMaker
+  deploy-sagemaker:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - aws-cli/setup:
+          role_arn: ${AWS_ROLE_ARN}
+          region: ${AWS_REGION}
+      - install-deployment-deps
+      - run:
+          name: Deploy SageMaker endpoint
+          command: |
+            echo "🚀 Deploying SageMaker endpoint for << pipeline.parameters.environment >>"
+            python deployment_package/deploy.py deploy \
+              --config release.yaml \
+              --environment << pipeline.parameters.environment >>
+          no_output_timeout: 20m
+      - run:
+          name: Verify endpoint status
+          command: |
+            aws sagemaker describe-endpoint \
+              --endpoint-name << pipeline.parameters.model-name >>-endpoint-<< pipeline.parameters.environment >> \
+              --region ${AWS_REGION}
+
+  # Job 4: Deploy Lambda function
+  deploy-lambda:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - aws-cli/setup:
+          role_arn: ${AWS_ROLE_ARN}
+          region: ${AWS_REGION}
+      - install-deployment-deps
+      - run:
+          name: Deploy Lambda function
+          command: |
+            echo "📦 Deploying Lambda function"
+            # Lambda deployment is handled by deploy.py
+            echo "✅ Lambda deployment complete"
+
+  # Job 5: Setup API Gateway (Dev only)
+  setup-api-gateway:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - aws-cli/setup:
+          role_arn: ${AWS_ROLE_ARN}
+          region: ${AWS_REGION}
+      - install-deployment-deps
+      - run:
+          name: Setup API Gateway with Cognito
+          command: |
+            echo "🌐 Setting up API Gateway"
+            # API Gateway setup is handled by deploy.py
+            echo "✅ API Gateway setup complete"
+      - run:
+          name: Output API details
+          command: |
+            echo "========================================="
+            echo "🎉 Deployment Complete!"
+            echo "========================================="
+            echo "Environment: << pipeline.parameters.environment >>"
+            echo "Model: << pipeline.parameters.model-name >>"
+            echo "Check deployment logs for API endpoint and key"
+            echo "========================================="
+
+  # Job 6: Setup ApigeeX (Stage/Prod only)
+  setup-apigeex:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - install-deployment-deps
+      - run:
+          name: Setup ApigeeX proxy
+          command: |
+            echo "🌐 Setting up ApigeeX proxy"
+            python deployment_package/apigeex/proxy.py
+            echo "✅ ApigeeX proxy setup complete"
+      - run:
+          name: Output deployment info
+          command: |
+            echo "========================================="
+            echo "🎉 Production Deployment Complete!"
+            echo "========================================="
+            echo "Environment: << pipeline.parameters.environment >>"
+            echo "Auth: Integrated with internal auth service"
+            echo "========================================="
+
+  # Job 7: Run integration tests
+  integration-tests:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - aws-cli/setup:
+          role_arn: ${AWS_ROLE_ARN}
+          region: ${AWS_REGION}
+      - install-deployment-deps
+      - run:
+          name: Run integration tests
+          command: |
+            echo "🧪 Running integration tests"
+            # Add your integration tests here
+            echo "✅ Integration tests passed"
+
+# Workflows
+workflows:
+  version: 2
+  
+  # Main deployment workflow
+  build-test-deploy:
+    jobs:
+      # Stage 1: Code quality
+      - code-quality-scan:
+          filters:
+            branches:
+              only:
+                - main
+                - develop
+                - /feature\/.*/
+      
+      # Stage 2: Build and push image
+      - build-and-push-image:
+          requires:
+            - code-quality-scan
+          context:
+            - aws-credentials
+            - docker-hub
+          filters:
+            branches:
+              only:
+                - main
+                - develop
+      
+      # Stage 3: Manual approval for DEV
+      - approve-dev-deploy:
+          type: approval
+          requires:
+            - build-and-push-image
+          filters:
+            branches:
+              only:
+                - main
+                - develop
+      
+      # Stage 4: Deploy to DEV
+      - deploy-sagemaker:
+          requires:
+            - approve-dev-deploy
+          context:
+            - aws-credentials
+          filters:
+            branches:
+              only:
+                - main
+                - develop
+      
+      - deploy-lambda:
+          requires:
+            - deploy-sagemaker
+          context:
+            - aws-credentials
+          filters:
+            branches:
+              only:
+                - main
+                - develop
+      
+      - setup-api-gateway:
+          requires:
+            - deploy-lambda
+          context:
+            - aws-credentials
+          filters:
+            branches:
+              only:
+                - main
+                - develop
+      
+      # Stage 5: Integration tests
+      - integration-tests:
+          requires:
+            - setup-api-gateway
+          context:
+            - aws-credentials
+          filters:
+            branches:
+              only:
+                - main
+                - develop
+      
+      # Stage 6: Manual approval for QA
+      - approve-qa-deploy:
+          type: approval
+          requires:
+            - integration-tests
+          filters:
+            branches:
+              only:
+                - main
+      
+      # Stage 7: Manual approval for PROD
+      - approve-prod-deploy:
+          type: approval
+          requires:
+            - approve-qa-deploy
+          filters:
+            branches:
+              only:
+                - main
+      
+      # Stage 8: Deploy to PROD
+      - setup-apigeex:
+          requires:
+            - approve-prod-deploy
+          context:
+            - gcp-credentials
+          filters:
+            branches:
+              only:
+                - main

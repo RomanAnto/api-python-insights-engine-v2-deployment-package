@@ -1,0 +1,105 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# PyCharm
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AWS
+*.pem
+*.key
+
+# Secrets
+.env
+.env.local
+secrets.yaml
+*.secret
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Model files (large files should not be in git)
+*.pkl
+*.h5
+*.pt
+*.pth
+*.onnx
+*.pb
+models/
+checkpoints/
+
+# Docker
+.dockerignore
+
+# CircleCI local
+.circleci/local-cli/
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+*.tfvars
+
+# Generated files
+lambda.zip
+lambda_package/
+
+# IDE
+*.sublime-project
+*.sublime-workspace
+
+# Documentation builds
+docs/_build/
+site/
